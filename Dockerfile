@@ -1,27 +1,11 @@
 # GLOBAL VARIABLES
 ARG NODE_VERSION=14.19.3
-ARG GOLANG_VERSION=1.18
 ARG PULUMI_VERSION=3.43.1
-ARG NATS_PROVIDER_VERSION=0.6.0
-
-# nats-box go builder
-FROM golang:${GOLANG_VERSION}-alpine AS builder
-
-WORKDIR $GOPATH/src/github.com/nats-io/
-
-RUN apk add -U --no-cache git binutils
-RUN go install github.com/nats-io/nats-top@v0.5.2
-RUN go install -ldflags="-X main.version=2.7.1" github.com/nats-io/nsc@2.7.1
-RUN go install github.com/nats-io/natscli/nats@v0.0.34
-RUN go install github.com/nats-io/stan.go/examples/stan-pub@latest
-RUN go install github.com/nats-io/stan.go/examples/stan-sub@latest
-RUN go install github.com/nats-io/stan.go/examples/stan-bench@latest
 
 # pulumi node base image
 FROM node:${NODE_VERSION}-alpine
 # https://stackoverflow.com/questions/53681522/share-variable-in-multi-stage-dockerfile-arg-before-from-not-substituted
 ARG PULUMI_VERSION
-ARG NATS_PROVIDER_VERSION
 
 # pulumi resource
 RUN apk add --update make
@@ -34,8 +18,7 @@ RUN wget -O pulumi.tar.gz https://get.pulumi.com/releases/sdk/pulumi-v${PULUMI_V
 
 # minio
 RUN sh -x \
-    && for version in 0.5.0 \
-                      0.13.2; \
+    && for version in 0.16.0; \
        do \
           mkdir -p /usr/local/pulumi/plugins/resource-minio-v${version}; \
           cd /usr/local/pulumi/plugins/resource-minio-v${version}; \
@@ -43,20 +26,6 @@ RUN sh -x \
           tar -zxf pulumi-resource-minio.tar.gz; \
           rm pulumi-resource-minio.tar.gz; \
        done
-
-# nats-box
-ENV NKEYS_PATH /nsc/nkeys
-ENV XDG_DATA_HOME /nsc
-ENV XDG_CONFIG_HOME /nsc/.config
-
-# copy from nats-box builder to node image
-RUN apk add -U --no-cache ca-certificates figlet
-COPY --from=builder /go/bin/* /usr/local/bin/
-RUN cd /usr/local/bin/ && \
-    ln -s nats-box nats-pub && \
-    ln -s nats-box nats-sub && \
-    ln -s nats-box nats-req && \
-    ln -s nats-box nats-rply
 
 # pulumi environment
 ENV PATH=${PATH}:/usr/local/pulumi \
@@ -66,5 +35,4 @@ ENV PATH=${PATH}:/usr/local/pulumi \
 COPY .profile $WORKDIR
 
 LABEL PULUMI_VERSION=v${PULUMI_VERSION} \
-      NODE_VERSION=${NODE_VERSION} \
-      NATS_BOX=${NATS_PROVIDER_VERSION}
+      NODE_VERSION=${NODE_VERSION} 
